@@ -8,7 +8,7 @@ mounted through ShadowMountPlus: pick a title, choose an action, and let the PS5
 do the work. The app keeps long operations running on the console even if the
 browser window is closed.
 
-## Firmware 13.60 + ShadowMountPlus 1.7 support (v1.1.3-smp17)
+## Firmware 13.60 + ShadowMountPlus 1.7 support (v1.1.4-smp17)
 
 This branch adds the missing compatibility between Game Compressor and the
 newer mount stack so `Validate`, `Validate and Repair`, and `Update APR-EMU`
@@ -35,8 +35,16 @@ work again on current consoles:
   hint: if SMP's API is disabled the wait falls back to the previous
   scan/restart behavior.
 
+### Naming rule for compressed images
+
+Operations (validate, repair, update APR-EMU) resolve compressed images only
+as `TITLEID.ffpfsc` — e.g. `PPSA12345.ffpfsc`. A differently named file still
+appears in the game list but its actions now fail immediately with a clear
+explanation instead of a generic lookup error. Rename the file and retry.
+(Thanks to @cobanov, PR #1.)
+
 Tested on PS5 firmware **13.60** with **kstuff-lite 1.11** and
-**ShadowMountPlus 1.7beta3/1.7beta4**: a 67 GB title compressed to `.ffpfsc`
+**ShadowMountPlus 1.7beta3/1.7beta4** (community-confirmed on 13.20 and 13.42): a 67 GB title compressed to `.ffpfsc`
 (19.5 GB) and its full hash validation (1,029,215 blocks) completed clean,
 with the title mounted and launchable afterwards.
 
