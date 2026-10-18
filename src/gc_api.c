@@ -10082,6 +10082,16 @@ read_title_source_args(const http_request_t *req,
                                                source_path_size);
   if(source_rc == -2) return "sourcePath required";
   if(source_rc != 0) return "bad source path";
+  // Operations and force-remount temp names resolve .ffpfsc files only as
+  // TITLEID.ffpfsc; fail here with a fix instead of a generic lookup error.
+  if(ends_with_ci(source_path, ".ffpfsc")) {
+    char stem[256];
+    if(strip_extension_base(source_path, stem, sizeof(stem)) != 0 ||
+       strcmp(stem, title_id)) {
+      return "compressed image must be named TITLEID.ffpfsc (for example "
+             "PPSA12345.ffpfsc) for this action; rename the file and retry";
+    }
+  }
   return NULL;
 }
 
