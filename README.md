@@ -8,7 +8,7 @@ mounted through ShadowMountPlus: pick a title, choose an action, and let the PS5
 do the work. The app keeps long operations running on the console even if the
 browser window is closed.
 
-## Firmware 13.60 + ShadowMountPlus 1.7 support (v1.1.4-smp17)
+## Firmware 13.60 + ShadowMountPlus 1.7 support (v1.1.5-smp17)
 
 This branch adds the missing compatibility between Game Compressor and the
 newer mount stack so `Validate`, `Validate and Repair`, and `Update APR-EMU`
@@ -25,6 +25,15 @@ work again on current consoles:
 - **Accepts folder titles exposed as real files on `/system_ex`** (firmware
   13.60 behavior with kstuff 1.11), not only `nullfs` overlays, in the
   `system_ex` binding check used by `Update APR-EMU` and mount verification.
+- **Progress-aware mount waits (v1.1.5):** mounting a very large `.ffpfsc`
+  (100 GB+ LVD attach + pfsc unwrap + nested exFAT attach) can legitimately
+  take many minutes — longer than the old fixed wait, which reported
+  `ShadowMountPlus did not remount ...` even though SMP finished the mount
+  shortly after. The remount wait now extends itself for up to 20 minutes
+  while the unwrap artifacts of the expected image are present (proof that
+  SMP is actively working), so validate / repair / compress finalize wait
+  exactly as long as the mount really needs. Genuine failures still surface
+  quickly: without progress artifacts the previous behavior applies.
 - **Self-healing mounts (v1.1.3):** SMP keeps its LVD image mounts across
   restarts while Game Compressor clears mount links at the start of
   mount-dependent operations, which could previously leave both sides waiting

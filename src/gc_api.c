@@ -57,6 +57,8 @@
 #define GC_REPAIR_WAIT_SECONDS 180
 #define GC_REPAIR_WAIT_STEP_SECONDS 2
 #define GC_REMOUNT_WAIT_SECONDS 10
+#define GC_REMOUNT_PROGRESS_EXTEND_SECONDS 90
+#define GC_REMOUNT_WAIT_CAP_SECONDS 1200
 #define GC_REMOUNT_WAIT_STEP_SECONDS 1
 #define GC_MOUNT_SCAN_REQUEST_SECONDS 2
 #define GC_MOUNT_NUDGE_FIRST_SECONDS 5
@@ -3009,12 +3011,30 @@ image_link_matches_expected(const char *image_link,
   return paths_equal_ignoring_trailing_slash(outer_mount, expected_parent);
 }
 
+/* Mounting a very large .ffpfsc (LVD attach + pfsc unwrap + nested exFAT
+ * attach) can outlast the base wait window while SMP is demonstrably making
+ * progress. While the unwrap artifacts of the expected image exist, keep
+ * extending the deadline; the absolute cap still bounds genuine failures. */
+static int
+shadowmount_mount_in_progress(const char *expected_image_link) {
+  struct stat st;
+  char parent[1024];
+  if(!expected_image_link || !expected_image_link[0]) return 0;
+  if(stat(expected_image_link, &st) == 0) return 1;
+  if(path_parent(expected_image_link, parent, sizeof(parent)) == 0 &&
+     stat(parent, &st) == 0) {
+    return 1;
+  }
+  return 0;
+}
+
 static int
 wait_for_shadowmount_links(const char *title_id,
                            const char *expected_mount_link,
                            const char *expected_image_link,
                            char *err, size_t err_size) {
-  time_t deadline = time(NULL) + GC_REMOUNT_WAIT_SECONDS;
+  time_t started_at = time(NULL);
+  time_t deadline = started_at + GC_REMOUNT_WAIT_SECONDS;
   char mount_link[1024];
   char image_link[1024];
   char actual_type[64];
@@ -3025,6 +3045,7 @@ wait_for_shadowmount_links(const char *title_id,
   time_t next_mount_nudge_at = time(NULL) + GC_MOUNT_NUDGE_FIRST_SECONDS;
   int stale_logged = 0;
   int restart_recovery_attempted = 0;
+  time_t progress_logged_at = 0;
 
   if(err && err_size) err[0] = 0;
   gc_log("shadowmount wait title=%s mount=%s image=%s",
@@ -3078,6 +3099,19 @@ wait_for_shadowmount_links(const char *title_id,
       gc_log("shadowmount wait cancelled title=%s",
              title_id ? title_id : "");
       return -1;
+    }
+    if(shadowmount_mount_in_progress(expected_image_link)) {
+      time_t cap = started_at + GC_REMOUNT_WAIT_CAP_SECONDS;
+      time_t proposed = now + GC_REMOUNT_PROGRESS_EXTEND_SECONDS;
+      if(proposed > deadline && deadline < cap) {
+        deadline = proposed < cap ? proposed : cap;
+        if(!progress_logged_at || now - progress_logged_at >= 60) {
+          gc_log("shadowmount wait extended title=%s until=%lld "
+                 "(mount artifacts present)",
+                 title_id ? title_id : "", (long long)deadline);
+          progress_logged_at = now;
+        }
+      }
     }
     if(now >= next_scan_at && now + GC_REMOUNT_WAIT_STEP_SECONDS < deadline) {
       scan_err[0] = 0;
